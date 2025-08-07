@@ -122,7 +122,7 @@ def ChangeClientSecret():
         body = f"""
                     <h3>"Client secret" er i ferd med å utløpe for "Send email routines" programmet.</h3>
                     <p>Den nåværende "client secret" utløper {formatted_exp_date}.</p>
-                    <p>Vennligst oppdater "client secret" <a href="{os.getenv('CLIENT_SECRET_UPDATE_URL')}">her</a>, og endre verdien på "CLIENT_SECRET" og "CLIENT_SECRET_EXPIRATION_DATE" i .env-filen i "RoutineNotifications Function App" <a href="https://portal.azure.com/#@k2kompetanse.no/resource/subscriptions/eaf7505d-e089-4798-9031-2e200df76549/resourceGroups/Routine_notification/providers/Microsoft.Web/sites/RoutineNotification/appServices">her</a> for å sikre fortsatt tilgang.</p>
+                    <p>Vennligst oppdater "client secret" <a href="{os.getenv('CLIENT_SECRET_UPDATE_URL')}">her</a>, og oppdatere verdien på "CLIENT_SECRET" og "CLIENT_SECRET_EXPIRATION_DATE" i "RoutineNotifications Function App" <a href="{os.getenv('CHANGE_SECRET_URL')}">her</a> for å sikre fortsatt tilgang.</p>
                 """
         
         email_data = {
