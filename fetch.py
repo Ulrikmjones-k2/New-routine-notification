@@ -3,9 +3,9 @@ Local test script for WordPress RSS monitoring
 Tests RSS parsing and data formatting, then sends new routines to support mail
 """
 
-import feedparser
 import json
 import traceback
+import feedparser
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
 from sendMail import sendMail, ChangeClientSecret
