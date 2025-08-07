@@ -9,8 +9,7 @@ import json
 import traceback
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
-from sendMail import sendMail
-from sendMail import ChangeClientSecret
+from sendMail import sendMail, ChangeClientSecret
 import os
 from babel.dates import format_date
 import re
@@ -318,11 +317,3 @@ def is_about_to_expire():
     except Exception as e:
         print(f"❌ Error checking client secret expiration: {str(e)}")
         return False
-
-
-
-if __name__ == "__main__":
-    test_rss_feed()
-    is_about_to_expire()
-
-    # test
