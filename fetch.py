@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Local test script for WordPress RSS monitoring
 Tests RSS parsing and data formatting, then sends new routines to support mail
