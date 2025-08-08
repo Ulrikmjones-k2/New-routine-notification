@@ -5,18 +5,23 @@ Tests RSS parsing and data formatting, then sends new routines to support mail
 
 import json
 import traceback
-import feedparser
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
 from sendMail import sendMail, ChangeClientSecret
 import os
 from babel.dates import format_date
 import re
+import feedparser
 
 
 is_first_routine = True
 first_routine_id = None
 cache_updated = False
+temp_dir = os.environ.get('TEMP', '/tmp')
+cache_file = os.path.join(temp_dir, 'cache.json')
+sentNotifications_file = os.path.join(temp_dir, 'sentNotifications.json')
+
+
 
 def format_course_data(entry):
     """
@@ -73,16 +78,19 @@ def lastroutine():
     """
     Get the last routine ID from the JSON file
     """
-    with open("cache.json", "r") as file:
+    global cache_file
+    with open(cache_file, "r") as file:
         data = json.load(file)
-        return data['id']
+        ids = data.get('ids', [])
+        print(f"  → Last routine IDs from cache: {ids}")
+    return ids
 
 
 
 
 def is_new_routine(routine_data):
     """
-    Check if this routine is newer than the last processed routine
+    Check if this routine is newer than any of the last processed routines
     """
     
     # Parse the routine's Norwegian publication time
@@ -91,14 +99,18 @@ def is_new_routine(routine_data):
     # Remove timezone info for comparison (both are in Norwegian time)
     routine_published_naive = routine_published.replace(tzinfo=None)
     
-    # Check if published within the last hour
+    # Get list of cached routine IDs
+    cached_ids = lastroutine()
+    
     print(f"  → Routine '{routine_data['title']}' published at {routine_published_naive}")
-    if routine_data['id'] == lastroutine():
-        print(routine_data['id'])
-        print(lastroutine())
+    print(f"  → Checking against cached IDs: {cached_ids}")
+    
+    # Check if this routine ID is already in the cache
+    if routine_data['id'] in cached_ids:
         print(f"  → This routine is already processed (ID: {routine_data['id']})")
         return False
 
+    print(f"  → This routine is NEW! (ID: {routine_data['id']})")
     print(f"  → Search URL: {routine_data['search_url']}")
     return True
 
@@ -108,8 +120,16 @@ def test_rss_feed():
     Test the RSS feed parsing and formatting
     """
 
-    global is_first_routine, first_routine_id
-    
+    global is_first_routine, first_routine_id, cache_updated, cache_file
+
+    # Create cache file if it does not exist
+    if not os.path.exists(cache_file):
+        print(f"📁 Creating {cache_file} - file not found")
+        with open(cache_file, "w") as f:
+            json.dump({"ids": []}, f, indent=2)
+    else:
+        print(f"📁 Cache file {cache_file} already exists, using existing data")
+
     print("🔍 Testing WordPress RSS Feed Parsing")
     print("=" * 50)
     
@@ -157,19 +177,17 @@ def test_rss_feed():
             print(f"  📅 Published: {routine_data['published_norwegian']}")
             print(f"  🔗 URL: {routine_data['search_url']}")
             
-            # Check if this routine was published in the last hour
+            # Check if this routine is new (not in the last 10 processed)
             if is_new_routine(routine_data):
                 new_routines.append(routine_data)
                 print(f"  ✅ This routine is NEW!")
                 callMailFunction(routine_data)
+                
+                # Update cache with this new routine ID
+                updatecahche(routine_data['id'])
             else:
-                print(f"  ⏸️  This routine is not new, stopping processing...")
-                if is_first_routine:
-                    break
-                if first_routine_id is None:
-                    first_routine_id = routine_data['id']
-                updatecahche(first_routine_id)
-                break
+                print(f"  ⏸️  This routine is already processed, continuing to next...")
+                # Continue processing all routines instead of breaking
 
         # Summary
         print(f"\n📊 Summary:")
@@ -181,34 +199,43 @@ def test_rss_feed():
             for routine in new_routines:
                 print(f"  - {routine['title']} ({routine['published_norwegian']})")
 
-            # Send new routines to support mail
-            print(f"\n📤 Sending {len(new_routines)} new routines to support mail...")
+            print(f"\n📤 {len(new_routines)} new routines were sent to support mail")
         else:
             print(f"\n😴 No new routines to post")
         
         print(f"\n✅ Test completed successfully!")
-        if cache_updated:
-            print(f"  📦 Cache was updated with new routine ID: {first_routine_id}")
+        if new_routines:
+            print(f"  📦 Cache was updated with {len(new_routines)} new routine IDs")
         else:
             print(f"  📦 Cache was NOT updated, no new routines found")
     except Exception as e:
         print(f"❌ Error processing RSS feed: {str(e)}")
         traceback.print_exc()
 
-
-def updatecahche(id):
+def updatecahche(new_id):
     """
-    Update the cache with the latest routine ID
+    Update the cache with the latest routine ID, keeping only the 10 newest
     """
-    global cache_updated
+    global cache_updated, cache_file
     try:
-        with open("cache.json", "w") as file:
-            json.dump({"id": id}, file)
-            print(f"📦 Cache updated with new routine ID: {id}")
+        # Get current cached IDs
+        cached_ids = lastroutine()
+        
+        # Add new ID to the beginning of the list
+        if new_id not in cached_ids:
+            cached_ids.insert(0, new_id)
+        
+        # Keep only the 10 newest IDs
+        cached_ids = cached_ids[:10]
+        
+        # Save updated cache
+        with open(cache_file, "w") as file:
+            json.dump({"ids": cached_ids}, file, indent=2)
+            print(f"📦 Cache updated with new routine ID: {new_id}")
+            print(f"📦 Current cached IDs: {cached_ids}")
             cache_updated = True
     except Exception as e:
         print(f"❌ Error updating cache: {str(e)}")
-
 
 
 def callMailFunction(routine_data):
@@ -234,20 +261,12 @@ def callMailFunction(routine_data):
 
 
 
-
-
-
-
-
-
-
-
-
-
 def is_about_to_expire():
     """
     Check if the client secret is about to expire
     """
+
+
     try:
         expiration_date = os.getenv('CLIENT_SECRET_EXPIRATION_DATE')
         if not expiration_date:
@@ -263,15 +282,18 @@ def is_about_to_expire():
         hours_until_expiration = time_diff.total_seconds() / 3600
         print(f"⏳ Client secret expires in {time_diff.days} days, {hours_until_expiration:.1f} hours")
         
-        notifications_file = 'sentNotifications.json'
+        global sentNotifications_file
         
         sent_notifications = {}
-        if os.path.exists(notifications_file):
-            try:
-                with open(notifications_file, 'r') as f:
-                    sent_notifications = json.load(f)
-            except:
-                sent_notifications = {}
+        if not os.path.exists(sentNotifications_file):
+            print(f"📁 Creating {sentNotifications_file} - file not found")
+            with open(sentNotifications_file, "w") as f:
+                json.dump(sent_notifications, f, indent=2)
+        else:
+            print(f"📁 Sent notifications file {sentNotifications_file} already exists, using existing data")
+            with open(sentNotifications_file, 'r') as f:
+                sent_notifications = json.load(f)
+                
 
         exp_date_key = expiration_date
 
@@ -280,7 +302,7 @@ def is_about_to_expire():
         if hours_until_expiration > 720 and exp_date_key in sent_notifications:
             print("🧹 Clearing notification cache - new client secret detected (expiration > 150 days)")
             sent_notifications = {}
-            with open(notifications_file, 'w') as f:
+            with open(sentNotifications_file, 'w') as f:
                 json.dump(sent_notifications, f, indent=2)
         
         if exp_date_key not in sent_notifications:
@@ -305,7 +327,7 @@ def is_about_to_expire():
         
         # Save updated notifications
         if should_notify:
-            with open(notifications_file, 'w') as f:
+            with open(sentNotifications_file, 'w') as f:
                 json.dump(sent_notifications, f, indent=2)
             
 
@@ -316,3 +338,15 @@ def is_about_to_expire():
     except Exception as e:
         print(f"❌ Error checking client secret expiration: {str(e)}")
         return False
+    
+if __name__ == "__main__":
+    print("🔍 Starting WordPress RSS Monitoring Test")
+    print("=" * 50)
+    
+    # Check if client secret is about to expire
+    is_about_to_expire()
+
+    # Run the RSS feed test
+    test_rss_feed()
+    
+    print("\n✅ Test completed successfully!")
