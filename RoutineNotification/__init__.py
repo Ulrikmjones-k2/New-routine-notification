@@ -18,6 +18,7 @@ def main(myTimer: func.TimerRequest) -> None:
         logging.info('Modules imported successfully')
         
         logging.info('Checking client secret expiration...')
+        
         fetch.is_about_to_expire()
         logging.info('Client secret check completed')
         
