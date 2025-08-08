@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime, timezone, timedelta
 from  babel.dates import format_date
+import logging
 
 load_dotenv()
 
@@ -28,14 +29,14 @@ def get_access_token():
 
         result = app.acquire_token_for_client(scopes=CONFIG["scopes"])
         if result and "access_token" in result:
-            print("✅ Access token acquired successfully")
+            logging.info("✅ Access token acquired successfully")
             return result["access_token"]
         else:
-            print(f"❌ Failed to acquire access token: {result.get('error_description', 'Unknown error')}")
+            logging.info(f"❌ Failed to acquire access token: {result.get('error_description', 'Unknown error')}")
             return None
         
     except Exception as e:
-        print(f"❌ Exception occurred while acquiring access token: {str(e)}")
+        logging.info(f"❌ Exception occurred while acquiring access token: {str(e)}")
         return None
 
 
@@ -84,15 +85,15 @@ def sendMail(routine_data):
         }
 
         response = requests.post(endpoint, headers=headers, json=email_data)
-        print(response)
+        logging.info(response)
         if response.status_code == 202:
-            print("✅ Email sent successfully")
+            logging.info("✅ Email sent successfully")
             return True
         else:
-            print(f"❌ Failed to send email: {response.status_code} {response.text}")
+            logging.info(f"❌ Failed to send email: {response.status_code} {response.text}")
             return False
     except Exception as e:
-        print(f"❌ Exception occurred while sending email: {str(e)}")
+        logging.info(f"❌ Exception occurred while sending email: {str(e)}")
         return False
 
 
@@ -153,11 +154,11 @@ def ChangeClientSecret():
         response = requests.post(endpoint, headers=headers, json=email_data)
         
         if response.status_code == 202:
-            print("✅ Email sent successfully")
+            logging.info("✅ Email sent successfully")
             return True
         else:
-            print(f"❌ Failed to send email: {response.status_code} {response.text}")
+            logging.info(f"❌ Failed to send email: {response.status_code} {response.text}")
             return False
     except Exception as e:
-        print(f"❌ Exception occurred while sending email: {str(e)}")
+        logging.info(f"❌ Exception occurred while sending email: {str(e)}")
         return False
