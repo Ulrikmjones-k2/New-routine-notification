@@ -3,7 +3,6 @@ Local test script for WordPress RSS monitoring
 Tests RSS parsing and data formatting, then sends new routines to support mail
 """
 
-import json
 import traceback
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
@@ -13,14 +12,6 @@ from babel.dates import format_date
 import re
 import feedparser
 import logging
-
-
-is_first_routine = True
-first_routine_id = None
-cache_updated = False
-cache_file =  'cache.json'
-sentNotifications_file =  'sentNotifications.json'
-
 
 
 def format_course_data(entry):
@@ -48,6 +39,9 @@ def format_course_data(entry):
             published_date_utc = datetime.now(timezone.utc)
     else:
         published_date_utc = datetime.now(timezone.utc)
+    current_norwegian_time = datetime.utcnow() + timedelta(hours=2)
+        
+    logging.info(f"\n⏰ Current Norwegian time: {current_norwegian_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Convert to Norwegian time (+2 hours)
     norwegian_time = published_date_utc + timedelta(hours=2)
@@ -65,6 +59,7 @@ def format_course_data(entry):
         'id': numeric_id,
         'title': title,
         'published_norwegian': norwegian_time.strftime('%Y-%m-%d %H:%M:%S'),
+        current_norwegian_time: current_norwegian_time.strftime('%Y-%m-%d %H:%M:%S'),
         'published_iso': norwegian_time.isoformat(),
         'search_url': search_url,
         'encoded_title': encoded_title,
@@ -74,23 +69,10 @@ def format_course_data(entry):
     
     return routine_data
 
-def lastroutine():
-    """
-    Get the last routine ID from the JSON file
-    """
-    global cache_file
-    with open(cache_file, "r") as file:
-        data = json.load(file)
-        ids = data.get('ids', [])
-        logging.info(f"  → Last routine IDs from cache: {ids}")
-    return ids
-
-
-
 
 def is_new_routine(routine_data):
     """
-    Check if this routine is newer than any of the last processed routines
+    Check if this routine was posted in the last 6 hours
     """
     
     # Parse the routine's Norwegian publication time
@@ -99,20 +81,25 @@ def is_new_routine(routine_data):
     # Remove timezone info for comparison (both are in Norwegian time)
     routine_published_naive = routine_published.replace(tzinfo=None)
     
-    # Get list of cached routine IDs
-    cached_ids = lastroutine()
+    # Get current Norwegian time
+    current_norwegian_time = datetime.utcnow() + timedelta(hours=2)
+    
+    # Calculate time difference
+    time_diff = current_norwegian_time - routine_published_naive
+    hours_since_published = time_diff.total_seconds() / 3600
     
     logging.info(f"  → Routine '{routine_data['title']}' published at {routine_published_naive}")
-    logging.info(f"  → Checking against cached IDs: {cached_ids}")
+    logging.info(f"  → Current time: {current_norwegian_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"  → Hours since published: {hours_since_published:.2f}")
     
-    # Check if this routine ID is already in the cache
-    if routine_data['id'] in cached_ids:
-        logging.info(f"  → This routine is already processed (ID: {routine_data['id']})")
+    # Check if routine was published in the last 6 hours
+    if hours_since_published <= 6:
+        logging.info(f"  → This routine is NEW! (published {hours_since_published:.2f} hours ago)")
+        logging.info(f"  → Search URL: {routine_data['search_url']}")
+        return True
+    else:
+        logging.info(f"  → This routine is too old (published {hours_since_published:.2f} hours ago)")
         return False
-
-    logging.info(f"  → This routine is NEW! (ID: {routine_data['id']})")
-    logging.info(f"  → Search URL: {routine_data['search_url']}")
-    return True
 
 
 def test_rss_feed():
@@ -120,15 +107,6 @@ def test_rss_feed():
     Test the RSS feed parsing and formatting
     """
 
-    global is_first_routine, first_routine_id, cache_updated, cache_file
-
-    # Create cache file if it does not exist
-    if not os.path.exists(cache_file):
-        logging.info(f"📁 Creating {cache_file} - file not found")
-        with open(cache_file, "w") as f:
-            json.dump({"ids": []}, f, indent=2)
-    else:
-        logging.info(f"📁 Cache file {cache_file} already exists, using existing data")
 
     logging.info("🔍 Testing WordPress RSS Feed Parsing")
     logging.info("=" * 50)
@@ -155,11 +133,6 @@ def test_rss_feed():
             logging.info("\n❌ No entries found in the RSS feed")
             return
         
-        # Get current time in Norwegian timezone for comparison
-        current_norwegian_time = datetime.utcnow() + timedelta(hours=2)
-        
-        logging.info(f"\n⏰ Current Norwegian time: {current_norwegian_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
         # Process each entry in the feed
         logging.info(f"\n📚 Processing {len(feed.entries)} routines:")
         logging.info("-" * 30)
@@ -183,11 +156,9 @@ def test_rss_feed():
                 logging.info(f"  ✅ This routine is NEW!")
                 callMailFunction(routine_data)
                 
-                # Update cache with this new routine ID
-                updatecahche(routine_data['id'])
             else:
-                logging.info(f"  ⏸️  This routine is already processed, continuing to next...")
-                # Continue processing all routines instead of breaking
+                logging.info(f"  ⏸️  This routine is already processed, stopping process...")
+                break
 
         # Summary
         logging.info(f"\n📊 Summary:")
@@ -204,54 +175,20 @@ def test_rss_feed():
             logging.info(f"\n😴 No new routines to post")
         
         logging.info(f"\n✅ Test completed successfully!")
-        if new_routines:
-            logging.info(f"  📦 Cache was updated with {len(new_routines)} new routine IDs")
-        else:
-            logging.info(f"  📦 Cache was NOT updated, no new routines found")
     except Exception as e:
         logging.info(f"❌ Error processing RSS feed: {str(e)}")
         traceback.print_exc()
-
-def updatecahche(new_id):
-    """
-    Update the cache with the latest routine ID, keeping only the 10 newest
-    """
-    global cache_updated, cache_file
-    try:
-        # Get current cached IDs
-        cached_ids = lastroutine()
-        
-        # Add new ID to the beginning of the list
-        if new_id not in cached_ids:
-            cached_ids.insert(0, new_id)
-        
-        # Keep only the 10 newest IDs
-        cached_ids = cached_ids[:10]
-        
-        # Save updated cache
-        with open(cache_file, "w") as file:
-            json.dump({"ids": cached_ids}, file, indent=2)
-            logging.info(f"📦 Cache updated with new routine ID: {new_id}")
-            logging.info(f"📦 Current cached IDs: {cached_ids}")
-            cache_updated = True
-    except Exception as e:
-        logging.info(f"❌ Error updating cache: {str(e)}")
 
 
 def callMailFunction(routine_data):
     """
     Send data and call function in sendMail.py
     """
-    global is_first_routine, first_routine_id
     try:
-        id = routine_data['id']
         logging.info(f"📧 Sending routine data to support mail...")
         result = sendMail(routine_data)
         if result:
             logging.info(f"  ✅ Mail sent successfully!")
-            if is_first_routine:
-                first_routine_id = id
-                is_first_routine = False
         else:
             logging.info(f"  ❌ Failed to send mail")
 
@@ -282,55 +219,23 @@ def is_about_to_expire():
         hours_until_expiration = time_diff.total_seconds() / 3600
         logging.info(f"⏳ Client secret expires in {time_diff.days} days, {hours_until_expiration:.1f} hours")
         
-        global sentNotifications_file
-        
-        sent_notifications = {}
-        if not os.path.exists(sentNotifications_file):
-            logging.info(f"📁 Creating {sentNotifications_file} - file not found")
-            with open(sentNotifications_file, "w") as f:
-                json.dump(sent_notifications, f, indent=2)
-        else:
-            logging.info(f"📁 Sent notifications file {sentNotifications_file} already exists, using existing data")
-            with open(sentNotifications_file, 'r') as f:
-                sent_notifications = json.load(f)
-                
-
-        exp_date_key = expiration_date
-
-        # Clear cache if expiration date is recently updated
-        # If more than 30 days (720 hours) until expiration and cache exists for this date
-        if hours_until_expiration > 720 and exp_date_key in sent_notifications:
-            logging.info("🧹 Clearing notification cache - new client secret detected (expiration > 150 days)")
-            sent_notifications = {}
-            with open(sentNotifications_file, 'w') as f:
-                json.dump(sent_notifications, f, indent=2)
-        
-        if exp_date_key not in sent_notifications:
-            sent_notifications[exp_date_key] = {}
-        
+                  
         should_notify = False
         
-        if 72 <= hours_until_expiration <= 96 and not sent_notifications[exp_date_key].get('3_days', False):
+        if 72 <= hours_until_expiration <= 75:
             should_notify = True
-            sent_notifications[exp_date_key]['3_days'] = True
-            logging.info(f"🔔 3-4 days expiration warning triggered ({time_diff.days} days remaining)")
+            logging.info(f"🔔 3 day expiration warning triggered ({time_diff.days} days remaining)")
         
-        elif 24 <= hours_until_expiration <= 48 and not sent_notifications[exp_date_key].get('1_day', False):
+        elif 24 <= hours_until_expiration <= 27:
             should_notify = True
-            sent_notifications[exp_date_key]['1_day'] = True
-            logging.info(f"🔔 1-2 days expiration warning triggered ({time_diff.days} days remaining)")
+            logging.info(f"🔔 1 day expiration warning triggered ({time_diff.days} days remaining)")
         
-        elif 0 <= hours_until_expiration <= 24 and not sent_notifications[exp_date_key].get('3_hours', False):
+        elif 21 <= hours_until_expiration <= 24:
             should_notify = True
-            sent_notifications[exp_date_key]['3_hours'] = True
             logging.info(f"🔔 Under 24-hour expiration warning triggered ({hours_until_expiration:.1f} hours remaining)")
         
         # Save updated notifications
         if should_notify:
-            with open(sentNotifications_file, 'w') as f:
-                json.dump(sent_notifications, f, indent=2)
-            
-
             if ChangeClientSecret():
                 logging.info("✅ Request for client secret change successfully sent")
         return should_notify
