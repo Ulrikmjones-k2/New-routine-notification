@@ -92,8 +92,8 @@ def is_new_routine(routine_data):
     logging.info(f"  → Current time: {current_norwegian_time.strftime('%Y-%m-%d %H:%M:%S')}")
     logging.info(f"  → Hours since published: {hours_since_published:.2f}")
     
-    # Check if routine was published in the last 6 hours
-    if hours_since_published <= 6:
+    # Check if routine was published in the last 7 days (1 week)
+    if hours_since_published <= 7 * 24:
         logging.info(f"  → This routine is NEW! (published {hours_since_published:.2f} hours ago)")
         logging.info(f"  → Search URL: {routine_data['search_url']}")
         return True
@@ -222,18 +222,21 @@ def is_about_to_expire():
                   
         should_notify = False
         
-        if 72 <= hours_until_expiration <= 75:
+        # 2.5 weeks = 420 hours, 3.5 weeks = 588 hours
+        if 420 <= hours_until_expiration <= 588:
             should_notify = True
-            logging.info(f"🔔 3 day expiration warning triggered ({time_diff.days} days remaining)")
+            logging.info(f"🔔 3 week expiration warning triggered ({time_diff.days} days remaining)")
         
-        elif 24 <= hours_until_expiration <= 27:
+        # 1.5 weeks = 252 hours, 2.5 weeks = 420 hours
+        elif 252 <= hours_until_expiration <= 420:
             should_notify = True
-            logging.info(f"🔔 1 day expiration warning triggered ({time_diff.days} days remaining)")
+            logging.info(f"🔔 2 week expiration warning triggered ({time_diff.days} days remaining)")
         
-        elif 21 <= hours_until_expiration <= 24:
+        # Under 1.5 weeks = under 252 hours
+        elif hours_until_expiration < 252:
             should_notify = True
-            logging.info(f"🔔 Under 24-hour expiration warning triggered ({hours_until_expiration:.1f} hours remaining)")
-        
+            logging.info(f"🔔 Under 1.5 week expiration warning triggered ({hours_until_expiration:.1f} hours remaining)")
+
         # Save updated notifications
         if should_notify:
             if ChangeClientSecret():
