@@ -2,9 +2,10 @@ import msal
 import requests
 from dotenv import load_dotenv
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from  babel.dates import format_date
 import logging
+import traceback
 
 load_dotenv()
 
@@ -30,13 +31,16 @@ def get_access_token():
         result = app.acquire_token_for_client(scopes=CONFIG["scopes"])
         if result and "access_token" in result:
             logging.info("✅ Access token acquired successfully")
+            print("✅ Access token acquired successfully")
             return result["access_token"]
         else:
             logging.info(f"❌ Failed to acquire access token: {result.get('error_description', 'Unknown error')}")
+            print(f"❌ Failed to acquire access token: {result.get('error_description', 'Unknown error')}")
             return None
         
     except Exception as e:
         logging.info(f"❌ Exception occurred while acquiring access token: {str(e)}")
+        print(f"❌ Exception occurred while acquiring access token: {str(e)}")
         return None
 
 
@@ -44,6 +48,12 @@ def sendMail(routine_data):
     """
     Send routine data via email using Microsoft Graph API
     """
+    stack_trace = ''.join(traceback.format_stack())
+    
+    logging.info(f"🚨 SENDMAIL CALLED! Stack trace:")
+    print(f"🚨 SENDMAIL CALLED! Stack trace:")
+    logging.info(stack_trace)
+    print(stack_trace)
     try:
         token = get_access_token()
         if not token:
@@ -86,14 +96,18 @@ def sendMail(routine_data):
 
         response = requests.post(endpoint, headers=headers, json=email_data)
         logging.info(response)
+        print(response)
         if response.status_code == 202:
             logging.info("✅ Email sent successfully")
+            print("✅ Email sent successfully")
             return True
         else:
             logging.info(f"❌ Failed to send email: {response.status_code} {response.text}")
+            print(f"❌ Failed to send email: {response.status_code} {response.text}")
             return False
     except Exception as e:
         logging.info(f"❌ Exception occurred while sending email: {str(e)}")
+        print(f"❌ Exception occurred while sending email: {str(e)}")
         return False
 
 
@@ -155,10 +169,13 @@ def ChangeClientSecret():
         
         if response.status_code == 202:
             logging.info("✅ Email sent successfully")
+            print("✅ Email sent successfully")
             return True
         else:
             logging.info(f"❌ Failed to send email: {response.status_code} {response.text}")
+            print(f"❌ Failed to send email: {response.status_code} {response.text}")
             return False
     except Exception as e:
         logging.info(f"❌ Exception occurred while sending email: {str(e)}")
+        print(f"❌ Exception occurred while sending email: {str(e)}")
         return False
