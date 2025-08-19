@@ -40,24 +40,36 @@ def get_access_token():
         return None
 
 
-def sendMail(routine_data):
+def sendMail(routines):
     """
-    Send routine data via email using Microsoft Graph API
+    Send all new routines in a single email using Microsoft Graph API
     """
     try:
         token = get_access_token()
         if not token:
             return "access token not available"
         
-        to_email = os.getenv("SUPPORT_MAIL")
-        from_email = os.getenv("SUPPORT_MAIL")
-        subject = f"Ny rutine: {routine_data['title']}"
-        body = f"""
-                    <h3>Ny rutine opprettet: {routine_data['title']}</h3>
-                    <p>Rutinen ble publisert: {routine_data['formatted_date']}</p>
-                    <p>Du kan se rutinen <a href="{routine_data['search_url']}">her</a>.</p>
-                """
-        
+
+        to_email = os.getenv("RECIEVER_MAIL")
+        from_email = os.getenv("SENDER_MAIL")
+
+        if len(routines) > 1:
+            subject = f"K2 Quality: {len(routines)} nye rutiner publisert"
+            body = "<h3>Nye rutiner opprettet siste uken:</h3><ul><br>"
+        else:
+            subject = f"K2 Quality: 1 ny rutine publisert"
+            body = "<h3>1 ny rutine opprettet siste uken:</h3><ul><br>"
+
+        # Build HTML body with all routines
+        for routine in routines:
+            body += f"""
+                <li>
+                    <strong>{routine['title']}</strong><br>
+                    Publisert: {routine['formatted_date']}<br>
+                    <a href="{routine['search_url']}">Se rutinen</a>
+                </li><br>
+            """
+        body += "</ul>"
 
         email_data = {
             "message": {
@@ -78,7 +90,6 @@ def sendMail(routine_data):
         }
 
         endpoint = f"https://graph.microsoft.com/v1.0/users/{from_email}/sendMail"
-
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
@@ -95,6 +106,7 @@ def sendMail(routine_data):
     except Exception as e:
         logging.info(f"❌ Exception occurred while sending email: {str(e)}")
         return False
+    
 
 
 def ChangeClientSecret():
@@ -116,9 +128,9 @@ def ChangeClientSecret():
         token = get_access_token()
         if not token:
             return "access token not available"
-        
-        to_email = os.getenv("SUPPORT_MAIL")
-        from_email = os.getenv("SUPPORT_MAIL")
+
+        to_email = os.getenv("RECIEVER_MAIL")
+        from_email = os.getenv("SENDER_MAIL")
         subject = '"client secret" er i ferd med å utløpe'
         body = f"""
                     <h3>"Client secret" er i ferd med å utløpe for "Send email routines" programmet.</h3>
