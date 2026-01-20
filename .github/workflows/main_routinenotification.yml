@@ -29,20 +29,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Create and start virtual environment
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-
       - name: Install dependencies
         run: |
-          source venv/bin/activate
-          pip install -r requirements.txt
+          pip install --upgrade pip
+          pip install -r requirements.txt --target=".python_packages/lib/site-packages"
 
       - name: Zip artifact for deployment
         run: |
-          zip -r release.zip . -x "venv/*" ".git/*" ".github/*" "__pycache__/*" "*.pyc" ".env"
+          zip -r release.zip . -x ".git/*" ".github/*" "__pycache__/*" "*.pyc" ".env" ".venv/*" "venv/*"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
